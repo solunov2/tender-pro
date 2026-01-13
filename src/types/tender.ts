@@ -1,0 +1,205 @@
+// Tender AI Platform — Type Definitions (V1)
+// Authoritative schemas matching backend PostgreSQL
+
+export type TenderStatus = 'PENDING' | 'LISTED' | 'ANALYZED' | 'ERROR';
+export type TenderType = string | null;  // Flexible: AOON, AOOI, AOO, AOR, Consultation, etc.
+export type DocumentType = 'AVIS' | 'RC' | 'CPS' | 'ANNEXE' | 'UNKNOWN';
+
+// Provenance tracking for every extracted field
+export interface TrackedValue<T> {
+  value: T | null;
+  source_document: DocumentType | 'WEBSITE' | null;
+  source_date: string | null;
+}
+
+// Lot structure
+export interface TenderLot {
+  lot_number: string | null;
+  lot_subject: string | null;
+  lot_estimated_value: string | null;
+  caution_provisoire: string | null;
+  // Deep analysis fields (Phase 2)
+  caution_definitive_percentage?: string | null;
+  estimated_caution_definitive_value?: string | null;
+  execution_date?: string | null;
+  items?: TenderItem[];
+}
+
+// Item within a lot (Deep analysis)
+export interface TenderItem {
+  item_name: string | null;
+  quantity: string | null;
+  technical_description_full: string | null;
+}
+
+// Multilingual keywords
+export interface TenderKeywords {
+  keywords_fr: string[];
+  keywords_eng: string[];
+  keywords_ar: string[];
+}
+
+// Website-scraped extended metadata (authoritative)
+export interface WebsiteExtendedMetadata {
+  acheteur_public: TrackedValue<string>;  // Buyer/purchasing entity
+  lieu_execution: TrackedValue<string>;   // Execution location
+  estimation_ttc: TrackedValue<string>;   // Estimated value DHS TTC
+  lieu_ouverture_plis: TrackedValue<string>; // Bid opening location
+  caution_provisoire_website: TrackedValue<string>; // Provisional guarantee from website
+  contact_administratif: TrackedValue<string>; // Raw contact info to be structured by AI
+}
+
+// Avis metadata schema (Phase 1 - Night Shift)
+export interface AvisMetadata {
+  reference_tender: TrackedValue<string>;
+  tender_type: TrackedValue<TenderType>;
+  issuing_institution: TrackedValue<string>;
+  // NEW: Lieu d'exécution (website + docs fallbacks)
+  execution_location?: TrackedValue<string>;
+  submission_deadline: {
+    date: TrackedValue<string>;
+    time: TrackedValue<string>;
+  };
+  folder_opening_location: TrackedValue<string>;
+  subject: TrackedValue<string>;
+  total_estimated_value: TrackedValue<string> & { currency?: string | null };
+  lots: TenderLot[];
+  keywords: TenderKeywords;
+  // Website extended metadata (authoritative)
+  website_extended?: WebsiteExtendedMetadata;
+}
+
+// Deep analysis data for a lot (complementary to AvisMetadata)
+export interface LotDeepData {
+  lot_number: string;
+  caution_definitive_percentage?: TrackedValue<string>;
+  estimated_caution_definitive_value?: {
+    value: string | null;
+    currency: string | null;
+  };
+  execution_delay?: {
+    value: string | null;
+    unit: string | null;
+    source_document: DocumentType | null;
+  };
+  items: TenderItem[];
+}
+
+// Structured contact info (AI-parsed from raw contact text)
+export interface StructuredContact {
+  name: string | null;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+}
+
+// Additional conditions from deep analysis
+export interface AdditionalConditions {
+  qualification_criteria: string | null;
+  required_documents: string[];
+  warranty_period: string | null;
+  payment_terms: string | null;
+}
+
+// Universal fields schema (Phase 2 - User Shift)
+// Contains ONLY complementary data not in AvisMetadata
+
+export interface UniversalMetadata {
+  institution_address: TrackedValue<string>;
+  lots_deep_data: LotDeepData[];
+  additional_conditions: AdditionalConditions;
+  // AI-structured contact from website raw text
+  structured_contact?: StructuredContact;
+}
+
+// Document extracted from tender
+export interface TenderDocument {
+  id: string;
+  tender_id: string;
+  document_type: DocumentType;
+  filename: string;
+  raw_text: string | null;
+  page_count: number | null;
+  extraction_method: 'DIGITAL' | 'OCR';
+  extracted_at: string;
+}
+
+// Main Tender record
+export interface Tender {
+  id: string;
+  external_reference: string;
+  source_url: string;
+  status: TenderStatus;
+  
+  // Scraped at download time
+  scraped_at: string;
+  download_date: string;
+  
+  // Avis metadata (Phase 1)
+  avis_metadata: AvisMetadata | null;
+  
+  // Universal metadata (Phase 2 - on demand)
+  universal_metadata: UniversalMetadata | null;
+  
+  // Related documents
+  documents?: TenderDocument[];
+  
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+}
+
+// API Response types
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+// Scraper log entry
+export interface ScraperLogEntry {
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+  timestamp?: string;
+}
+
+// Scraper stats
+export interface ScraperStats {
+  total: number;
+  downloaded: number;
+  failed: number;
+  elapsed: number;
+}
+
+// Scraper status
+export interface ScraperStatus {
+  is_running: boolean;
+  current_phase: string;
+  total_tenders: number;
+  downloaded: number;
+  failed: number;
+  elapsed_seconds: number;
+  last_run: string | null;
+  logs?: ScraperLogEntry[];
+  stats?: ScraperStats;
+}
+
+// Search/filter params
+export interface TenderSearchParams {
+  query?: string;
+  status?: TenderStatus;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  per_page?: number;
+}
